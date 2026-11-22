@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockCommand — Inventory & Warehouse Dashboard</title>
+<meta name="description" content="StockCommand: a fast, browser-based inventory and warehouse management dashboard. Track SKUs, adjust stock, monitor alerts, and export CSV — no install required.">
+<meta property="og:title" content="StockCommand — Inventory & Warehouse Dashboard">
+<meta property="og:description" content="Track inventory, manage warehouses, spot low-stock alerts, and export CSV. Free, browser-based, no account needed.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0f1117">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1117'/%3E%3Crect x='5' y='8' width='22' height='4' rx='2' fill='%234f8ef7'/%3E%3Crect x='5' y='14' width='14' height='4' rx='2' fill='%236ee7b7'/%3E%3Crect x='5' y='20' width='18' height='4' rx='2' fill='%234f8ef7' opacity='.5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d26;
+    --surface2: #22263a;
+    --border: #2d3147;
+    --accent: #4f8ef7;
+    --accent2: #6ee7b7;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --radius: 10px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 1.25rem; font-weight: 700; letter-spacing: -.5px; color: var(--accent); }
+  .logo span { color: var(--accent2); }
+  .topbar-actions { display: flex; gap: 10px; }
+  button {
+    cursor: pointer; border: none; border-radius: var(--radius); font-family: var(--font);
+    font-size: .875rem; font-weight: 500; padding: 8px 16px; transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 5px 11px; font-size: .8rem; }
+
+  /* ── LAYOUT ── */
+  .layout { display: flex; min-height: calc(100vh - 57px); }
+  .sidebar {
+    width: 210px; flex-shrink: 0; background: var(--surface);
+    border-right: 1px solid var(--border); padding: 20px 0;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 20px; cursor: pointer; color: var(--muted);
+    font-size: .9rem; font-weight: 500; border-left: 3px solid transparent;
+    transition: all .15s;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--surface2); }
+  .nav-icon { width: 18px; text-align: center; }
+  .main { flex: 1; padding: 28px; overflow-x: auto; }
+
+  /* ── CARDS / KPI ROW ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+  .kpi-label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .kpi-value { font-size: 1.9rem; font-weight: 700; line-height: 1; }
+  .kpi-sub { font-size: .78rem; color: var(--muted); margin-top: 6px; }
+  .kpi-ok { color: var(--accent2); }
+  .kpi-warn { color: var(--warn); }
+  .kpi-bad { color: var(--danger); }
+
+  /* ── SECTION HEADER ── */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-size: 1rem; font-weight: 600; }
+  .search-bar {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-family: var(--font); font-size: .875rem;
+    padding: 7px 14px; width: 220px; outline: none;
+  }
+  .search-bar::placeholder { color: var(--muted); }
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  select.filter-select {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-family: var(--font); font-size: .875rem;
+    padding: 7px 12px; outline: none; cursor: pointer;
+  }
+
+  /* ── TABLE ── */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  thead { background: var(--surface2); }
+  th { text-align: left; padding: 11px 16px; color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+  td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: rgba(79,142,247,.05); }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600;
+  }
+  .badge-green { background: rgba(110,231,183,.15); color: var(--accent2); }
+  .badge-yellow { background: rgba(245,158,11,.15); color: var(--warn); }
+  .badge-red { background: rgba(239,68,68,.15); color: var(--danger); }
+  .badge-blue { background: rgba(79,142,247,.15); color: var(--accent); }
+  .row-actions { display: flex; gap: 6px; }
+
+  /* ── WAREHOUSE GRID ── */
+  .wh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .wh-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+  }
+  .wh-name { font-weight: 600; font-size: .95rem; margin-bottom: 4px; }
+  .wh-loc { font-size: .8rem; color: var(--muted); margin-bottom: 14px; }
+  .wh-bar-bg { background: var(--surface2); border-radius: 999px; height: 8px; margin-bottom: 6px; }
+  .wh-bar-fill { height: 8px; border-radius: 999px; transition: width .4s; }
+  .wh-stats { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    z-index: 200; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
+  .form-row { margin-bottom: 16px; }
+  .form-label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  .form-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: var(--font); font-size: .875rem; padding: 9px 13px; outline: none;
+    transition: border-color .15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--surface2);
+    border: 1px solid var(--border); border-left: 4px solid var(--accent2);
+    border-radius: var(--radius); padding: 12px 20px; font-size: .875rem;
+    color: var(--text); z-index: 300; opacity: 0; transform: translateY(12px);
+    transition: all .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── EMPTY ── */
+  .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+  /* ── PAGINATION ── */
+  .pagination { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 12px; }
+  .page-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 5px 12px; font-size: .82rem;
+  }
+  .page-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .page-info { font-size: .82rem; color: var(--muted); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { padding: 16px; }
+    .kpi-row { grid-template-columns: 1fr 1fr; }
+    .topbar { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">Stock<span>Command</span></div>
+  <div class="topbar-actions">
+    <button class="btn-secondary btn-sm" onclick="exportCSV()">&#8595; Export CSV</button>
+    <button class="btn-primary btn-sm" onclick="openAddModal()">+ Add Product</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-item active" onclick="showView('dashboard')" id="nav-dashboard">
+      <span class="nav-icon">&#9632;</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showView('inventory')" id="nav-inventory">
+      <span class="nav-icon">&#9646;</span> Inventory
+    </div>
+    <div class="nav-item" onclick="showView('warehouses')" id="nav-warehouses">
+      <span class="nav-icon">&#9644;</span> Warehouses
+    </div>
+    <div class="nav-item" onclick="showView('low-stock')" id="nav-low-stock">
+      <span class="nav-icon">&#9650;</span> Low Stock
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard">
+      <div class="kpi-row" id="kpi-row"></div>
+      <div class="section-header">
+        <div class="section-title">Recent Movements</div>
+      </div>
+      <div class="table-wrap" id="recent-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th><th>SKU</th><th>Category</th><th>Warehouse</th>
+              <th>Change</th><th>New Stock</th><th>When</th>
+            </tr>
+          </thead>
+          <tbody id="recent-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- INVENTORY VIEW -->
+    <div id="view-inventory" style="display:none">
+      <div class="section-header">
+        <div class="section-title">All Products</div>
+        <div class="filter-row">
+          <input class="search-bar" type="text" id="inv-search" placeholder="Search name or SKU…" oninput="renderInventory()">
+          <select class="filter-select" id="inv-cat-filter" onchange="renderInventory()">
+            <option value="">All Categories</option>
+          </select>
+          <select class="filter-select" id="inv-wh-filter" onchange="renderInventory()">
+            <option value="">All Warehouses</option>
+          </select>
+          <select class="filter-select" id="inv-status-filter" onchange="renderInventory()">
+            <option value="">All Status</option>
+            <option value="In Stock">In Stock</option>
+            <option value="Low Stock">Low Stock</option>
+            <option value="Out of Stock">Out of Stock</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th><th>SKU</th><th>Category</th><th>Warehouse</th>
+              <th>Qty</th><th>Reorder Pt.</th><th>Unit Cost</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inv-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="inv-pagination"></div>
+    </div>
+
+    <!-- WAREHOUSES VIEW -->
+    <div id="view-warehouses" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Warehouse Summary</div>
+        <button class="btn-primary btn-sm" onclick="openAddWarehouseModal()">+ Add Warehouse</button>
+      </div>
+      <div class="wh-grid" id="wh-grid"></div>
+    </div>
+
+    <!-- LOW STOCK VIEW -->
+    <div id="view-low-stock" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Low Stock &amp; Out of Stock Alerts</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th><th>SKU</th><th>Category</th><th>Warehouse</th>
+              <th>Qty</th><th>Reorder Pt.</th><th>Shortfall</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="low-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ADD / EDIT PRODUCT MODAL -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Add Product</div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Product Name *</label>
+        <input class="form-input" id="f-name" placeholder="e.g. Widget Pro X">
+      </div>
+      <div class="form-row">
+        <label class="form-label">SKU *</label>
+        <input class="form-input" id="f-sku" placeholder="e.g. WPX-001">
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Category</label>
+        <input class="form-input" id="f-category" list="cat-datalist" placeholder="Electronics, Apparel…">
+        <datalist id="cat-datalist"></datalist>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Warehouse</label>
+        <select class="form-input" id="f-warehouse"></select>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" id="f-qty" type="number" min="0" value="0">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Reorder Point</label>
+        <input class="form-input" id="f-reorder" type="number" min="0" value="10">
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Unit Cost ($)</label>
+        <input class="form-input" id="f-cost" type="number" min="0" step="0.01" value="0">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Unit Price ($)</label>
+        <input class="form-input" id="f-price" type="number" min="0" step="0.01" value="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="f-notes" placeholder="Optional notes">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD WAREHOUSE MODAL -->
+<div class="modal-overlay" id="wh-modal">
+  <div class="modal">
+    <div class="modal-title">Add Warehouse</div>
+    <div class="form-row">
+      <label class="form-label">Warehouse Name *</label>
+      <input class="form-input" id="wf-name" placeholder="e.g. East Wing">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Location</label>
+      <input class="form-input" id="wf-loc" placeholder="e.g. Chicago, IL">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Capacity (units)</label>
+      <input class="form-input" id="wf-cap" type="number" min="1" value="5000">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('wh-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveWarehouse()">Save Warehouse</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADJUST STOCK MODAL -->
+<div class="modal-overlay" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-title">Adjust Stock — <span id="adj-product-name"></span></div>
+    <div class="form-row">
+      <label class="form-label">Adjustment Type</label>
+      <select class="form-input" id="adj-type">
+        <option value="add">Add Stock (receive)</option>
+        <option value="remove">Remove Stock (ship / loss)</option>
+        <option value="set">Set Exact Quantity</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Amount</label>
+      <input class="form-input" id="adj-amount" type="number" min="0" value="0">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Reason (optional)</label>
+      <input class="form-input" id="adj-reason" placeholder="e.g. PO #1042, damaged goods">
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('adjust-modal')">Cancel</button>
+      <button class="btn-primary" onclick="applyAdjustment()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  DATA LAYER — localStorage-backed
+// ══════════════════════════════════════════════
+const LS_PRODUCTS   = 'sc_products';
+const LS_WAREHOUSES = 'sc_warehouses';
+const LS_MOVEMENTS  = 'sc_movements';
+
+function load(key, def) {
+  try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; }
+}
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+// ── Seed data ──────────────────────────────────
+function seedData() {
+  if (load(LS_WAREHOUSES, []).length) return; // already seeded
+
+  const warehouses = [
+    { id: 'wh1', name: 'Main Warehouse', location: 'Dallas, TX',      capacity: 10000 },
+    { id: 'wh2', name: 'West Hub',       location: 'Los Angeles, CA', capacity: 6000  },
+    { id: 'wh3', name: 'East Wing',      location: 'Newark, NJ',      capacity: 4000  },
+  ];
+  save(LS_WAREHOUSES, warehouses);
+
+  const products = [
+    { id: p(), name: 'Wireless Earbuds Pro',   sku: 'WEP-001', category: 'Electronics', warehouseId: 'wh1', qty: 340, reorder: 50,  cost: 18.50, price: 49.99,  notes: '' },
+    { id: p(), name: 'USB-C Hub 7-Port',        sku: 'UCH-002', category: 'Electronics', warehouseId: 'wh1', qty: 12,  reorder: 30,  cost: 9.00,  price: 29.99,  notes: 'Low runner' },
+    { id: p(), name: 'Ergonomic Mouse',         sku: 'ERM-003', category: 'Electronics', warehouseId: 'wh2', qty: 220, reorder: 40,  cost: 11.00, price: 34.99,  notes: '' },
+    { id: p(), name: 'Mechanical Keyboard',     sku: 'MKB-004', category: 'Electronics', warehouseId: 'wh2', qty: 0,   reorder: 20,  cost: 42.00, price: 99.99,  notes: 'Reorder asap' },
+    { id: p(), name: 'Cotton T-Shirt (M)',      sku: 'CTS-005', category: 'Apparel',     warehouseId: 'wh3', qty: 580, reorder: 100, cost: 4.00,  price: 19.99,  notes: '' },
+    { id: p(), name: 'Running Shoes (10)',      sku: 'RNS-006', category: 'Apparel',     warehouseId: 'wh3', qty: 7,   reorder: 25,  cost: 28.00, price: 79.99,  notes: '' },
+    { id: p(), name: 'Protein Powder 2lb',      sku: 'PPW-007', category: 'Health',      warehouseId: 'wh1', qty: 155, reorder: 60,  cost: 14.00, price: 39.99,  notes: '' },
+    { id: p(), name: 'Yoga Mat 6mm',            sku: 'YGM-008', category: 'Sports',      warehouseId: 'wh2', qty: 90,  reorder: 30,  cost: 7.50,  price: 24.99,  notes: '' },
+    { id: p(), name: 'LED Desk Lamp',           sku: 'LDL-009', category: 'Home Office', warehouseId: 'wh1', qty: 44,  reorder: 20,  cost: 12.00, price: 32.99,  notes: '' },
+    { id: p(), name: 'Stainless Water Bottle',  sku: 'SWB-010', category: 'Health',      warehouseId: 'wh3', qty: 0,   reorder: 40,  cost: 5.50,  price: 18.99,  notes: '' },
+    { id: p(), name: 'Noise-Cancel Headphones', sku: 'NCH-011', category: 'Electronics', warehouseId: 'wh2', qty: 68,  reorder: 25,  cost: 55.00, price: 149.99, notes: '' },
+    { id: p(), name: 'Backpack 40L',            sku: 'BPK-012', category: 'Apparel',     warehouseId: 'wh3', qty: 23,  reorder: 30,  cost: 18.00, price: 54.99,  notes: '' },
+  ];
+  save(LS_PRODUCTS, products);
+
+  // seed a few movements
+  const now = Date.now();
+  const mvs = [
+    { productId: products[0].id, name: 'Wireless Earbuds Pro', sku: 'WEP-001', warehouseName: 'Main Warehouse', change: +100, newQty: 340, reason: 'PO #0981', at: now - 36e5 },
+    { productId: products[2].id, name: 'Ergonomic Mouse',      sku: 'ERM-003', warehouseName: 'West Hub',       change: -20,  newQty: 220, reason: 'Shipped order #4421', at: now - 72e5 },
+    { productId: products[1].id, name: 'USB-C Hub 7-Port',     sku: 'UCH-002', warehouseName: 'Main Warehouse', change: -18,  newQty: 12,  reason: 'Shipped order #4420', at: now - 86e5 },
+    { productId: products[6].id, name: 'Protein Powder 2lb',   sku: 'PPW-007', warehouseName: 'Main Warehouse', change: +50,  newQty: 155, reason: 'PO #0982', at: now - 108e5 },
+    { productId: products[3].id, name: 'Mechanical Keyboard',  sku: 'MKB-004', warehouseName: 'West Hub',       change: -20,  newQty: 0,   reason: 'Shipped order #4419', at: now - 130e5 },
+  ];
+  save(LS_MOVEMENTS, mvs);
+}
+
+function p() { return 'p' + Math.random().toString(36).slice(2, 9); }
+
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let currentView  = 'dashboard';
+let editingId    = null;
+let adjustingId  = null;
+let invPage      = 1;
+const PAGE_SIZE  = 10;
+
+// ══════════════════════════════════════════════
+//  COMPUTED HELPERS
+// ══════════════════════════════════════════════
+function getProducts()   { return load(LS_PRODUCTS, []); }
+function getWarehouses() { return load(LS_WAREHOUSES, []); }
+function getMovements()  { return load(LS_MOVEMENTS, []); }
+
+function statusOf(p) {
+  if (p.qty <= 0) return 'Out of Stock';
+  if (p.qty <= p.reorder) return 'Low Stock';
+  return 'In Stock';
+}
+
+function statusBadge(s) {
+  if (s === 'In Stock')     return `<span class="badge badge-green">${s}</span>`;
+  if (s === 'Low Stock')    return `<span class="badge badge-yellow">${s}</span>`;
+  if (s === 'Out of Stock') return `<span class="badge badge-red">${s}</span>`;
+  return s;
+}
+
+function fmt$(n) { return '$' + Number(n).toFixed(2); }
+function fmtQty(n) { return Number(n).toLocaleString(); }
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function warehouseName(id) {
+  const w = getWarehouses().find(w => w.id === id);
+  return w ? w.name : '—';
+}
+
+// ══════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════
+function showView(v) {
+  currentView = v;
+  ['dashboard','inventory','warehouses','low-stock'].forEach(id => {
+    document.getElementById('view-' + id).style.display = id === v ? '' : 'none';
+    const n = document.getElementById('nav-' + id);
+    if (n) n.classList.toggle('active', id === v);
+  });
+  if (v === 'dashboard')  renderDashboard();
+  if (v === 'inventory')  { invPage = 1; renderInventory(); populateFilters(); }
+  if (v === 'warehouses') renderWarehouses();
+  if (v === 'low-stock')  renderLowStock();
+}
+
+// ══════════════════════════════════════════════
+//  KPI CARDS
+// ══════════════════════════════════════════════
+function renderDashboard() {
+  const products   = getProducts();
+  const warehouses = getWarehouses();
+  const movements  = getMovements();
+
+  const totalSKUs  = products.length;
+  const totalUnits = products.reduce((a, p) => a + p.qty, 0);
+  const totalValue = products.reduce((a, p) => a + p.qty * p.cost, 0);
+  const lowCount   = products.filter(p => statusOf(p) === 'Low Stock').length;
+  const outCount   = products.filter(p => statusOf(p) === 'Out of Stock').length;
+
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Total SKUs</div>
+      <div class="kpi-value kpi-ok">${totalSKUs}</div>
+      <div class="kpi-sub">across ${warehouses.length} warehouse${warehouses.length !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Units</div>
+      <div class="kpi-value">${totalUnits.toLocaleString()}</div>
+      <div class="kpi-sub">on-hand inventory</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Inventory Value</div>
+      <div class="kpi-value kpi-ok">${fmt$(totalValue)}</div>
+      <div class="kpi-sub">at cost</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Low Stock Alerts</div>
+      <div class="kpi-value ${lowCount ? 'kpi-warn' : 'kpi-ok'}">${lowCount}</div>
+      <div class="kpi-sub">products below reorder point</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Out of Stock</div>
+      <div class="kpi-value ${outCount ? 'kpi-bad' : 'kpi-ok'}">${outCount}</div>
+      <div class="kpi-sub">products at zero quantity</div>
+    </div>
+  `;
+
+  // recent movements table
+  const sorted = [...movements].sort((a, b) => b.at - a.at).slice(0, 8);
+  const tbody  = document.getElementById('recent-tbody');
+  if (!sorted.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-icon">&#9711;</div>No movements yet</div></td></tr>`;
+  } else {
+    tbody.innerHTML = sorted.map(m => {
+      const changeStr = m.change > 0
+        ? `<span style="color:var(--accent2)">+${m.change}</span>`
+        : `<span style="color:var(--danger)">${m.change}</span>`;
+      return `<tr>
+        <td>${m.name}</td>
+        <td><code style="color:var(--muted);font-size:.8rem">${m.sku}</code></td>
+        <td>—</td>
+        <td>${m.warehouseName}</td>
+        <td>${changeStr}</td>
+        <td>${fmtQty(m.newQty)}</td>
+        <td style="color:var(--muted);font-size:.8rem">${fmtDate(m.at)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  INVENTORY TABLE
+// ══════════════════════════════════════════════
+function populateFilters() {
+  const products = getProducts();
+  const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+  const whs  = getWarehouses();
+
+  const catEl = document.getElementById('inv-cat-filter');
+  const curCat = catEl.value;
+  catEl.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${c}" ${c === curCat ? 'selected' : ''}>${c}</option>`).join('');
+
+  const whEl = document.getElementById('inv-wh-filter');
+  const curWh = whEl.value;
+  whEl.innerHTML = '<option value="">All Warehouses</option>' +
+    whs.map(w => `<option value="${w.id}" ${w.id === curWh ? 'selected' : ''}>${w.name}</option>`).join('');
+
+  // also fill datalist for category field in modal
+  const dl = document.getElementById('cat-datalist');
+  if (dl) dl.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+}
+
+function getFilteredProducts() {
+  const q   = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  const cat = document.getElementById('inv-cat-filter')?.value || '';
+  const wh  = document.getElementById('inv-wh-filter')?.value  || '';
+  const st  = document.getElementById('inv-status-filter')?.value || '';
+  return getProducts().filter(p => {
+    if (q && !p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
+    if (cat && p.category !== cat) return false;
+    if (wh  && p.warehouseId !== wh) return false;
+    if (st  && statusOf(p) !== st) return false;
+    return true;
+  });
+}
+
+function renderInventory() {
+  const filtered = getFilteredProducts();
+  const total    = filtered.length;
+  const pages    = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (invPage > pages) invPage = pages;
+  const slice    = filtered.slice((invPage - 1) * PAGE_SIZE, invPage * PAGE_SIZE);
+
+  const tbody = document.getElementById('inv-tbody');
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">&#9711;</div>No products match</div></td></tr>`;
+  } else {
+    tbody.innerHTML = slice.map(p => {
+      const st = statusOf(p);
+      return `<tr>
+        <td><strong>${p.name}</strong></td>
+        <td><code style="color:var(--muted);font-size:.8rem">${p.sku}</code></td>
+        <td>${p.category || '—'}</td>
+        <td>${warehouseName(p.warehouseId)}</td>
+        <td style="font-weight:600">${fmtQty(p.qty)}</td>
+        <td>${p.reorder}</td>
+        <td style="color:var(--muted)">${fmt$(p.cost)}</td>
+        <td>${statusBadge(st)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-secondary btn-sm" onclick="openAdjustModal('${p.id}')">Adjust</button>
+            <button class="btn-secondary btn-sm" onclick="openEditModal('${p.id}')">Edit</button>
+            <button class="btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Del</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // pagination
+  const pagEl = document.getElementById('inv-pagination');
+  if (pages <= 1) { pagEl.innerHTML = ''; return; }
+  let html = `<span class="page-info">${total} products</span>`;
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="page-btn btn-sm ${i === invPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  pagEl.innerHTML = html;
+}
+
+function goPage(n) { invPage = n; renderInventory(); }
+
+// ══════════════════════════════════════════════
+//  WAREHOUSES VIEW
+// ══════════════════════════════════════════════
+function renderWarehouses() {
+  const whs      = getWarehouses();
+  const products = getProducts();
+  const grid     = document.getElementById('wh-grid');
+
+  if (!whs.length) {
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">&#9711;</div>No warehouses yet</div>`;
+    return;
+  }
+
+  grid.innerHTML = whs.map(w => {
+    const prods      = products.filter(p => p.warehouseId === w.id);
+    const usedUnits  = prods.reduce((a, p) => a + p.qty, 0);
+    const pct        = Math.min(100, Math.round((usedUnits / (w.capacity || 1)) * 100));
+    const fillColor  = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent2)';
+    const skuCount   = prods.length;
+    const value      = prods.reduce((a, p) => a + p.qty * p.cost, 0);
+    return `
+      <div class="wh-card">
+        <div class="wh-name">${w.name}</div>
+        <div class="wh-loc">&#128205; ${w.location || 'Location not set'}</div>
+        <div class="wh-bar-bg">
+          <div class="wh-bar-fill" style="width:${pct}%;background:${fillColor}"></div>
+        </div>
+        <div class="wh-stats">
+          <span>${usedUnits.toLocaleString()} / ${(w.capacity||0).toLocaleString()} units (${pct}%)</span>
+          <span>${skuCount} SKUs</span>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;font-size:.8rem;color:var(--muted)">
+          <span>Value: <strong style="color:var(--text)">${fmt$(value)}</strong></span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  LOW STOCK VIEW
+// ══════════════════════════════════════════════
+function renderLowStock() {
+  const alerts = getProducts().filter(p => statusOf(p) !== 'In Stock');
+  const tbody  = document.getElementById('low-tbody');
+  if (!alerts.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">&#10003;</div>All products are adequately stocked</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = alerts.map(p => {
+    const st       = statusOf(p);
+    const shortfall = Math.max(0, p.reorder - p.qty);
+    return `<tr>
+      <td><strong>${p.name}</strong></td>
+      <td><code style="color:var(--muted);font-size:.8rem">${p.sku}</code></td>
+      <td>${p.category || '—'}</td>
+      <td>${warehouseName(p.warehouseId)}</td>
+      <td style="font-weight:600">${fmtQty(p.qty)}</td>
+      <td>${p.reorder}</td>
+      <td style="color:var(--danger);font-weight:600">-${shortfall}</td>
+      <td>${statusBadge(st)}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn-secondary btn-sm" onclick="openAdjustModal('${p.id}')">Adjust</button>
+          <button class="btn-secondary btn-sm" onclick="openEditModal('${p.id}')">Edit</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════
+function openAddModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Add Product';
+  ['f-name','f-sku','f-category','f-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-qty').value     = 0;
+  document.getElementById('f-reorder').value = 10;
+  document.getElementById('f-cost').value    = 0;
+  document.getElementById('f-price').value   = 0;
+
+  const sel = document.getElementById('f-warehouse');
+  sel.innerHTML = getWarehouses().map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+  populateCatDatalist();
+  openModal('product-modal');
+}
+
+function openEditModal(id) {
+  const p = getProducts().find(x => x.id === id);
+  if (!p) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Edit Product';
+  document.getElementById('f-name').value     = p.name;
+  document.getElementById('f-sku').value      = p.sku;
+  document.getElementById('f-category').value = p.category || '';
+  document.getElementById('f-qty').value      = p.qty;
+  document.getElementById('f-reorder').value  = p.reorder;
+  document.getElementById('f-cost').value     = p.cost;
+  document.getElementById('f-price').value    = p.price;
+  document.getElementById('f-notes').value    = p.notes || '';
+
+  const sel = document.getElementById('f-warehouse');
+  sel.innerHTML = getWarehouses().map(w =>
+    `<option value="${w.id}" ${w.id === p.warehouseId ? 'selected' : ''}>${w.name}</option>`
+  ).join('');
+  populateCatDatalist();
+  openModal('product-modal');
+}
+
+function populateCatDatalist() {
+  const cats = [...new Set(getProducts().map(p => p.category).filter(Boolean))].sort();
+  const dl   = document.getElementById('cat-datalist');
+  if (dl) dl.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+}
+
+function saveProduct() {
+  const name = document.getElementById('f-name').value.trim();
+  const sku  = document.getElementById('f-sku').value.trim();
+  if (!name || !sku) { toast('Product name and SKU are required.', 'warn'); return; }
+
+  const products = getProducts();
+  // duplicate SKU check
+  const dupe = products.find(p => p.sku === sku && p.id !== editingId);
+  if (dupe) { toast('SKU already exists on another product.', 'warn'); return; }
+
+  const record = {
+    id:          editingId || p(),
+    name,
+    sku,
+    category:    document.getElementById('f-category').value.trim(),
+    warehouseId: document.getElementById('f-warehouse').value,
+    qty:         Math.max(0, parseInt(document.getElementById('f-qty').value) || 0),
+    reorder:     Math.max(0, parseInt(document.getElementById('f-reorder').value) || 0),
+    cost:        Math.max(0, parseFloat(document.getElementById('f-cost').value) || 0),
+    price:       Math.max(0, parseFloat(document.getElementById('f-price').value) || 0),
+    notes:       document.getElementById('f-notes').value.trim(),
+  };
+
+  if (editingId) {
+    const idx = products.findIndex(p => p.id === editingId);
+    if (idx !== -1) products[idx] = record;
+  } else {
+    products.push(record);
+  }
+  save(LS_PRODUCTS, products);
+  closeModal('product-modal');
+  toast(editingId ? 'Product updated.' : 'Product added.');
+  refreshCurrentView();
+}
+
+function deleteProduct(id) {
+  if (!confirm('Delete this product? This cannot be undone.')) return;
+  const products = getProducts().filter(p => p.id !== id);
+  save(LS_PRODUCTS, products);
+  toast('Product deleted.');
+  refreshCurrentView();
+}
+
+// ── Warehouse modal ────────────────────────────
+function openAddWarehouseModal() { openModal('wh-modal'); }
+function saveWarehouse() {
+  const name = document.getElementById('wf-name').value.trim();
+  if (!name) { toast('Warehouse name is required.', 'warn'); return; }
+  const whs = getWarehouses();
+  whs.push({
+    id:       'wh' + Date.now(),
+    name,
+    location: document.getElementById('wf-loc').value.trim(),
+    capacity: Math.max(1, parseInt(document.getElementById('wf-cap').value) || 1000),
+  });
+  save(LS_WAREHOUSES, whs);
+  ['wf-name','wf-loc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('wf-cap').value = 5000;
+  closeModal('wh-modal');
+  toast('Warehouse added.');
+  renderWarehouses();
+}
+
+// ── Adjust stock modal ─────────────────────────
+function openAdjustModal(id) {
+  const p = getProducts().find(x => x.id === id);
+  if (!p) return;
+  adjustingId = id;
+  document.getElementById('adj-product-name').textContent = p.name;
+  document.getElementById('adj-amount').value  = 0;
+  document.getElementById('adj-reason').value  = '';
+  document.getElementById('adj-type').value    = 'add';
+  openModal('adjust-modal');
+}
+
+function applyAdjustment() {
+  const products = getProducts();
+  const idx      = products.findIndex(p => p.id === adjustingId);
+  if (idx === -1) return;
+
+  const type   = document.getElementById('adj-type').value;
+  const amount = Math.max(0, parseInt(document.getElementById('adj-amount').value) || 0);
+  const reason = document.getElementById('adj-reason').value.trim();
+  const p      = products[idx];
+  const before = p.qty;
+
+  if (type === 'add')    { p.qty = before + amount; }
+  if (type === 'remove') { p.qty = Math.max(0, before - amount); }
+  if (type === 'set')    { p.qty = amount; }
+
+  const change = p.qty - before;
+  products[idx] = p;
+  save(LS_PRODUCTS, products);
+
+  // log movement
+  const movements = getMovements();
+  movements.unshift({
+    productId:     p.id,
+    name:          p.name,
+    sku:           p.sku,
+    warehouseName: warehouseName(p.warehouseId),
+    change,
+    newQty:        p.qty,
+    reason:        reason || type,
+    at:            Date.now(),
+  });
+  save(LS_MOVEMENTS, movements.slice(0, 200)); // keep last 200
+
+  closeModal('adjust-modal');
+  toast(`Stock adjusted: ${change >= 0 ? '+' : ''}${change} units.`);
+  refreshCurrentView();
+}
+
+// ── Generic modal helpers ──────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════
+//  EXPORT CSV
+// ══════════════════════════════════════════════
+function exportCSV() {
+  const products = getProducts();
+  const rows = [['Name','SKU','Category','Warehouse','Qty','Reorder Pt.','Unit Cost','Unit Price','Status','Notes']];
+  products.forEach(p => rows.push([
+    p.name, p.sku, p.category, warehouseName(p.warehouseId),
+    p.qty, p.reorder, p.cost, p.price, statusOf(p), p.notes || ''
+  ]));
+  const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'stockcommand-inventory.csv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported.');
+}
+
+// ══════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderLeftColor = type === 'warn' ? 'var(--warn)' : type === 'error' ? 'var(--danger)' : 'var(--accent2)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════════
+//  REFRESH HELPERS
+// ══════════════════════════════════════════════
+function refreshCurrentView() {
+  if (currentView === 'dashboard')  renderDashboard();
+  if (currentView === 'inventory')  { renderInventory(); populateFilters(); }
+  if (currentView === 'warehouses') renderWarehouses();
+  if (currentView === 'low-stock')  renderLowStock();
+}
+
+// ══════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════
+seedData();
+populateFilters();
+renderDashboard();
+</script>
+</body>
+</html>
